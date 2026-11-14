@@ -1,0 +1,586 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Spilletid</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  /* Layout: single-column mobile app. Setup view (roster + match config) and match view (big countdown + lineups). */
+  :root{
+    --bg:#f4f6f4; --surface:#ffffff; --surface-2:#eef1ee; --fg:#15201a; --muted:#5e6b63;
+    --line:#dde3dd; --accent:#1b9e4b; --accent-fg:#ffffff; --accent-weak:#e4f4ea;
+    --in:#1b9e4b; --out:#d9772b; --warn:#b4870a; --danger:#c23b3b;
+    --radius:16px; --font:"Inter",system-ui,-apple-system,sans-serif; --display:"Space Grotesk",var(--font);
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    --bg:#0e1511; --surface:#161e18; --surface-2:#1e2822; --fg:#e8efe9; --muted:#9baba1;
+    --line:#2a362e; --accent:#34d17a; --accent-fg:#06160d; --accent-weak:#16271c;
+    --in:#34d17a; --out:#f0a35a; --warn:#e8c25a; --danger:#f0786f; color-scheme:dark;
+  }}
+  :root[data-theme="dark"]{
+    --bg:#0e1511; --surface:#161e18; --surface-2:#1e2822; --fg:#e8efe9; --muted:#9baba1;
+    --line:#2a362e; --accent:#34d17a; --accent-fg:#06160d; --accent-weak:#16271c;
+    --in:#34d17a; --out:#f0a35a; --warn:#e8c25a; --danger:#f0786f; color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--fg);font-family:var(--font);margin:0;line-height:1.45;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .wrap{max-width:560px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));
+    padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 40px}
+  h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+  h1{font-size:1.5rem;font-weight:700}
+  h2{font-size:1.05rem;font-weight:600;margin-bottom:10px}
+  .tabnums{font-variant-numeric:tabular-nums}
+  .muted{color:var(--muted)}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  header.app{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+  .brand{display:flex;align-items:center;gap:9px}
+  .ball{width:26px;height:26px;border-radius:50%;background:var(--accent);position:relative;flex:none}
+  .ball::before{content:"";position:absolute;inset:6px;border-radius:50%;
+    background:radial-gradient(circle at 50% 35%,transparent 40%,var(--accent-fg) 41% 46%,transparent 47%)}
+  .brand small{display:block;color:var(--muted);font-size:.72rem;line-height:1;margin-top:2px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px}
+  .row{display:flex;gap:10px}
+  .row.wrap{flex-wrap:wrap}
+  .between{justify-content:space-between;align-items:center}
+
+  button{font-family:var(--font);font-size:1rem;cursor:pointer;border:none;border-radius:12px;
+    padding:11px 14px;background:var(--surface-2);color:var(--fg);font-weight:600;min-width:0}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn-accent{background:var(--accent);color:var(--accent-fg)}
+  .btn-lg{width:100%;padding:16px;font-size:1.1rem;font-family:var(--display)}
+  .btn-ghost{background:transparent;border:1px solid var(--line)}
+  .btn-sm{padding:7px 10px;font-size:.85rem;border-radius:10px}
+  .icon-btn{background:transparent;border:1px solid var(--line);width:38px;height:38px;padding:0;
+    display:grid;place-items:center;font-size:1.1rem}
+
+  input[type=text],input[type=number]{font-family:var(--font);font-size:1rem;color:var(--fg);
+    background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:10px 12px;width:100%}
+  input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  label.field{display:block;font-size:.8rem;font-weight:600;color:var(--muted);margin-bottom:5px;
+    text-transform:uppercase;letter-spacing:.04em}
+
+  .seg{display:flex;background:var(--surface-2);border-radius:12px;padding:3px;gap:3px}
+  .seg button{flex:1;background:transparent;padding:9px 6px;font-size:.95rem;border-radius:9px}
+  .seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-fg)}
+
+  .stepper{display:flex;align-items:center;gap:8px}
+  .stepper button{width:40px;height:40px;padding:0;font-size:1.3rem;font-family:var(--display);
+    background:var(--surface-2)}
+  .stepper .val{min-width:58px;text-align:center;font-family:var(--display);font-weight:600}
+
+  ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+  .plist-item{display:flex;align-items:center;gap:10px;padding:9px 11px;background:var(--bg);
+    border:1px solid var(--line);border-radius:12px}
+  .plist-item.off{opacity:.5}
+  .plist-item .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+  .check{width:24px;height:24px;border-radius:7px;border:2px solid var(--line);flex:none;
+    display:grid;place-items:center;background:var(--bg);color:transparent;font-size:.9rem;font-weight:800}
+  .plist-item.on .check{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .gk-pill{font-size:.7rem;font-weight:700;padding:3px 7px;border-radius:999px;background:var(--accent-weak);
+    color:var(--accent);text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+  .gk-toggle{font-size:.78rem;padding:5px 9px;border-radius:999px;border:1px solid var(--line);
+    background:transparent;color:var(--muted);font-weight:600;white-space:nowrap}
+  .gk-toggle.active{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+  .mini-min{font-variant-numeric:tabular-nums;font-size:.78rem;color:var(--muted);white-space:nowrap}
+
+  .warnbox{display:flex;gap:9px;align-items:flex-start;background:var(--accent-weak);
+    border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);border-radius:12px;padding:11px;margin-top:11px}
+  .warnbox .ico{font-size:1.05rem;line-height:1.3}
+  .warnbox b{color:var(--warn)}
+  .errbox{background:color-mix(in srgb,var(--danger) 14%,transparent);border:1px solid var(--danger);
+    color:var(--danger);border-radius:12px;padding:11px;margin-top:10px;font-weight:600;font-size:.9rem}
+
+  .add-row{display:flex;gap:8px;margin-top:11px}
+  .add-row input{flex:1}
+
+  /* ---- Match view ---- */
+  .count-card{text-align:center;padding:22px 16px}
+  .count-card .lab{font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .count{font-family:var(--display);font-weight:700;font-size:4.6rem;line-height:1;margin:6px 0 4px;
+    font-variant-numeric:tabular-nums}
+  .count.soon{color:var(--out)}
+  .count-sub{color:var(--muted);font-size:.9rem}
+  .count-card.now{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);animation:pulse 1s infinite}
+  .count-card.now .lab,.count-card.now .count-sub,.count-card.now .count{color:var(--accent-fg)}
+  @keyframes pulse{50%{opacity:.78}}
+  @media (prefers-reduced-motion:reduce){.count-card.now{animation:none}}
+
+  .swap-card{padding:0;overflow:hidden}
+  .swap-head{padding:9px 14px;font-size:.78rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--muted);border-bottom:1px solid var(--line)}
+  .swap-line{display:flex;align-items:center;gap:10px;padding:11px 14px}
+  .swap-line+.swap-line{border-top:1px solid var(--line)}
+  .swap-tag{font-family:var(--display);font-weight:700;font-size:.9rem;width:40px;flex:none}
+  .swap-tag.in{color:var(--in)}.swap-tag.out{color:var(--out)}
+  .swap-names{font-weight:600}
+  .nochange{padding:13px 14px;color:var(--muted);font-size:.92rem}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:420px){.cols{grid-template-columns:1fr}}
+  .col h3{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px}
+  .prow{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--line);
+    border-radius:10px;margin-bottom:6px}
+  .prow .q{font-family:var(--display);font-weight:700;color:var(--muted);width:16px;flex:none;font-size:.9rem}
+  .prow .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:.95rem}
+  .prow .t{font-variant-numeric:tabular-nums;font-size:.82rem;color:var(--muted)}
+  .prow.gk{background:var(--accent-weak);border-color:transparent}
+  .prow.next{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+
+  .controls{display:flex;gap:10px;margin-top:4px}
+  .controls button{flex:1}
+  .toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;justify-content:center}
+  .toggle{display:inline-flex;align-items:center;gap:7px;font-size:.82rem;color:var(--muted);font-weight:600}
+  .switch{width:38px;height:22px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);
+    position:relative;padding:0;flex:none}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;
+    background:var(--muted);transition:.15s}
+  .switch[aria-pressed=true]{background:var(--accent);border-color:var(--accent)}
+  .switch[aria-pressed=true]::after{left:18px;background:var(--accent-fg)}
+
+  .summary-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);
+    font-variant-numeric:tabular-nums}
+  .summary-row:last-child{border-bottom:none}
+  .foot{color:var(--muted);font-size:.78rem;text-align:center;margin-top:18px;line-height:1.6}
+  .link{color:var(--accent);background:none;padding:0;font-weight:600;font-size:inherit;display:inline}
+</style>
+
+<div class="wrap">
+  <header class="app">
+    <div class="brand">
+      <div class="ball" aria-hidden="true"></div>
+      <div><h1>Spilletid</h1><small>Bytter &amp; lik spilletid</small></div>
+    </div>
+    <button class="icon-btn" id="themeBtn" title="Bytt tema" aria-label="Bytt tema">◐</button>
+  </header>
+
+  <!-- ======================= SETUP ======================= -->
+  <section id="setupView">
+    <div class="card">
+      <div class="row between" style="margin-bottom:12px">
+        <h2 style="margin:0">Kampoppsett</h2>
+        <span class="muted tabnums" id="presentCount" style="font-size:.85rem"></span>
+      </div>
+
+      <div class="row" style="gap:14px;margin-bottom:14px">
+        <div style="flex:1">
+          <label class="field">Spillere på banen</label>
+          <div class="seg" id="formatSeg">
+            <button data-v="3">3</button><button data-v="5">5</button>
+            <button data-v="7">7</button><button data-v="9">9</button><button data-v="11">11</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row" style="gap:14px;margin-bottom:4px">
+        <div style="flex:1">
+          <label class="field">Kamplengde</label>
+          <div class="stepper">
+            <button id="lenMinus" aria-label="Kortere">−</button>
+            <span class="val tabnums"><span id="lenVal">20</span> min</span>
+            <button id="lenPlus" aria-label="Lengre">+</button>
+          </div>
+        </div>
+        <div style="flex:1">
+          <label class="field">Bytte ca. hvert</label>
+          <div class="stepper">
+            <button id="subMinus" aria-label="Færre bytter">−</button>
+            <span class="val tabnums"><span id="intVal">3.0</span></span>
+            <button id="subPlus" aria-label="Flere bytter">+</button>
+          </div>
+        </div>
+      </div>
+      <p class="muted" id="planHint" style="font-size:.82rem;margin:10px 0 0"></p>
+    </div>
+
+    <div class="card">
+      <div class="row between" style="margin-bottom:4px">
+        <h2 style="margin:0">Troppen i dag</h2>
+        <button class="btn-sm btn-ghost" id="allOnBtn">Hak av alle</button>
+      </div>
+      <p class="muted" style="font-size:.82rem;margin:4px 0 10px">
+        Hak av hvem som møtte. Trykk <b>Keeper</b> for å låse én i mål (utenfor rotasjonen).
+      </p>
+      <ul class="list" id="playerList"></ul>
+      <div class="add-row">
+        <input type="text" id="newName" placeholder="Legg til spiller…" autocomplete="off" enterkeyhint="done">
+        <button class="btn-accent" id="addBtn">Legg til</button>
+      </div>
+    </div>
+
+    <div id="gkWarn"></div>
+    <div id="setupErr"></div>
+
+    <button class="btn-accent btn-lg" id="startBtn">Generer bytteplan &amp; start ▶</button>
+
+    <div class="card" style="margin-top:14px">
+      <div class="row between">
+        <div>
+          <h2 style="margin:0 0 2px">Spilletid i økta</h2>
+          <p class="muted" style="font-size:.8rem;margin:0">Tas med videre så cup/dag blir rettferdig.</p>
+        </div>
+        <button class="btn-sm btn-ghost" id="resetSeason">Nullstill</button>
+      </div>
+      <div id="seasonTable" style="margin-top:10px"></div>
+    </div>
+
+    <p class="foot">
+      Lagres kun på din telefon. Legg til på hjem-skjermen for app-følelse.<br>
+      Skjermen holdes våken under kamp · lyd ved bytte.
+    </p>
+  </section>
+
+  <!-- ======================= MATCH ======================= -->
+  <section id="matchView" hidden>
+    <div class="card count-card" id="countCard">
+      <div class="lab" id="countLab">Neste bytte om</div>
+      <div class="count tabnums" id="countBig">00:00</div>
+      <div class="count-sub tabnums" id="countSub"></div>
+    </div>
+
+    <div class="card swap-card" id="swapCard"></div>
+
+    <div class="cols">
+      <div class="col">
+        <h3>På banen</h3>
+        <div id="fieldList"></div>
+      </div>
+      <div class="col">
+        <h3>Benk (kø)</h3>
+        <div id="benchList"></div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-ghost" id="pauseBtn">⏸ Pause</button>
+      <button class="btn-accent" id="doneBtn">Avslutt kamp</button>
+    </div>
+    <div class="toolbar">
+      <span class="toggle"><button class="switch" id="wakeSw" aria-pressed="true" aria-label="Hold skjerm våken"></button> Skjerm våken</span>
+      <span class="toggle"><button class="switch" id="soundSw" aria-pressed="true" aria-label="Lyd"></button> Lyd</span>
+      <span class="toggle"><button class="switch" id="vibSw" aria-pressed="true" aria-label="Vibrasjon"></button> Vibrasjon</span>
+    </div>
+    <p class="foot" id="wakeNote"></p>
+  </section>
+
+  <!-- ======================= SUMMARY ======================= -->
+  <section id="doneView" hidden>
+    <div class="card">
+      <h2>Kampen er ferdig 🏁</h2>
+      <p class="muted" style="font-size:.86rem;margin-top:0">Spilletid lagt til i økta.</p>
+      <div id="summaryTable"></div>
+    </div>
+    <button class="btn-accent btn-lg" id="backBtn">Tilbake til oppsett</button>
+  </section>
+</div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const uid=()=>Math.random().toString(36).slice(2,9);
+const KEY="spilletid.v1";
+const fmt=s=>{s=Math.max(0,Math.round(s));const m=Math.floor(s/60);return String(m).padStart(2,"0")+":"+String(s%60).padStart(2,"0");};
+const mmin=s=>{const m=Math.floor(s/60),r=Math.round(s%60);return m+"m "+String(r).padStart(2,"0")+"s";};
+
+/* ---------- Persistent state ---------- */
+const SEED=["Emma","Noah","Oliver","Maja","Leo","Sofie","Aksel","Nora"];
+let store={players:[],totals:{},cfg:{onField:5,len:20,interval:3.0},theme:null,opts:{sound:true,vib:true,wake:true}};
+function load(){try{const r=localStorage.getItem(KEY);if(r)store=Object.assign(store,JSON.parse(r));}catch(e){}
+  if(!store.players||!store.players.length)store.players=SEED.map(n=>({id:uid(),name:n}));
+  if(!store.totals)store.totals={};
+  store.players.forEach(p=>{if(!store.totals[p.id])store.totals[p.id]={field:0,gk:0,gkCount:0,lastGk:null};});
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(store));}catch(e){}}
+
+/* ---------- Session UI state ---------- */
+let present={}, keeperId=null, match=null, raf=null;
+
+/* ===================== SETUP RENDER ===================== */
+function renderFormat(){$$("#formatSeg button").forEach(b=>b.setAttribute("aria-pressed",+b.dataset.v===store.cfg.onField));}
+function renderLen(){$("#lenVal").textContent=store.cfg.len;$("#intVal").textContent=store.cfg.interval.toFixed(1)+" min";renderPlanHint();}
+
+function presentRotating(){return store.players.filter(p=>present[p.id]&&p.id!==keeperId);}
+function presentAll(){return store.players.filter(p=>present[p.id]);}
+
+function planPreview(){
+  const rot=presentRotating().length, slots=store.cfg.onField-(keeperId?1:0);
+  const len=store.cfg.len;
+  let segCount=Math.max(1,Math.round(len/store.cfg.interval));
+  const segLen=len/segCount;
+  return {rot,slots,segCount,segLen,bench:Math.max(0,rot-slots)};
+}
+function renderPlanHint(){
+  const p=planPreview();
+  const el=$("#planHint");
+  if(p.slots<=0){el.textContent="";return;}
+  if(p.rot<p.slots){el.innerHTML="⚠️ Bare "+p.rot+" utespillere – trenger "+p.slots+".";return;}
+  if(p.bench===0){el.innerHTML="Ingen innbyttere – alle "+p.rot+" spiller hele kampen.";return;}
+  el.innerHTML="≈ <b>"+p.segLen.toFixed(1)+" min</b> per periode · <b>"+(p.segCount-1)+" bytter</b> · hver spiller sitter ca. "
+    +Math.round(p.segCount*p.bench/p.rot)+" av "+p.segCount+" perioder.";
+}
+
+function renderPlayers(){
+  const ul=$("#playerList");ul.innerHTML="";
+  store.players.forEach(p=>{
+    const on=!!present[p.id], isGk=keeperId===p.id, t=store.totals[p.id]||{};
+    const li=document.createElement("li");
+    li.className="plist-item"+(on?" on":" off");
+    li.innerHTML=`<button class="check" data-act="toggle" data-id="${p.id}" aria-pressed="${on}" aria-label="Møtt: ${p.name}">✓</button>
+      <span class="nm">${esc(p.name)}</span>
+      ${t.gkCount?`<span class="mini-min">${t.gkCount}× 🧤</span>`:""}
+      <button class="gk-toggle ${isGk?"active":""}" data-act="gk" data-id="${p.id}" ${on?"":"disabled"}>${isGk?"Keeper ✓":"Keeper"}</button>
+      <button class="icon-btn btn-sm" data-act="del" data-id="${p.id}" aria-label="Fjern ${p.name}" style="width:34px;height:34px">✕</button>`;
+    ul.appendChild(li);
+  });
+  $("#presentCount").textContent=presentAll().length+" møtt";
+  renderPlanHint();renderGkWarn();renderSeason();
+}
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+function renderGkWarn(){
+  const box=$("#gkWarn");box.innerHTML="";
+  if(!keeperId){
+    const cand=presentRotating();
+    if(cand.length>store.cfg.onField){ // only suggest if there's a bench anyway
+      let best=null;presentAll().forEach(p=>{const c=store.totals[p.id].gkCount;if(best===null||c<best.c)best={p,c};});
+    }
+    return;
+  }
+  const t=store.totals[keeperId], name=store.players.find(p=>p.id===keeperId)?.name||"";
+  let html="";
+  if(t.lastGk){
+    html+=`<div class="warnbox"><span class="ico">⚠️</span><div><b>${esc(name)}</b> sto sist i mål (${t.lastGk})${t.gkCount?` — ${t.gkCount} ganger i økta`:""}.`;
+    // suggest player with fewest gk among present
+    let best=null;presentAll().forEach(p=>{const c=store.totals[p.id].gkCount;if(best===null||c<best.c)best={p,c};});
+    if(best&&best.p.id!==keeperId){
+      html+=` <button class="link" id="suggestGk" data-id="${best.p.id}">Foreslå ${esc(best.p.name)} (${best.c}×) i stedet</button>`;
+    }
+    html+=`</div></div>`;
+    box.innerHTML=html;
+  }
+}
+
+function renderSeason(){
+  const el=$("#seasonTable");
+  const rows=store.players.filter(p=>store.totals[p.id]&&(store.totals[p.id].field||store.totals[p.id].gk))
+    .map(p=>({p,t:store.totals[p.id]})).sort((a,b)=>(b.t.field+b.t.gk)-(a.t.field+a.t.gk));
+  if(!rows.length){el.innerHTML='<p class="muted" style="font-size:.82rem;margin:0">Ingen kamper spilt ennå.</p>';return;}
+  el.innerHTML=rows.map(({p,t})=>`<div class="summary-row"><span>${esc(p.name)}${t.gkCount?' <span class="gk-pill">'+t.gkCount+'× keeper</span>':''}</span><span class="tabnums muted">${mmin(t.field+t.gk)}</span></div>`).join("");
+}
+
+/* ===================== PLAN / ALGORITHM ===================== */
+/* Pre-calculated fair rotation. Greedy: least total time comes IN, most total time goes OUT.
+   carrySec = time already played this session (carry-over), so a short-changed player starts. */
+function buildPlan(){
+  const rot=presentRotating(), slots=store.cfg.onField-(keeperId?1:0);
+  const len=store.cfg.len*60;
+  let segCount=Math.max(1,Math.round(store.cfg.len/store.cfg.interval));
+  const segSec=len/segCount;
+  const ps=rot.map(p=>({id:p.id,name:p.name,carry:store.totals[p.id].field||0,match:0}));
+  const byId=id=>ps.find(x=>x.id===id);
+  const tot=x=>x.match+x.carry;
+  // starting lineup: least carry starts (fairness across the day), stable by name
+  let order=[...ps].sort((a,b)=>a.carry-b.carry||a.name.localeCompare(b.name,"nb"));
+  let field=order.slice(0,slots).map(x=>x.id);
+  let bench=order.slice(slots).map(x=>x.id);
+  const swapN=Math.min(bench.length,slots);
+  const segs=[];
+  let prev=null;
+  for(let i=0;i<segCount;i++){
+    // credit time for this segment
+    field.forEach(id=>byId(id).match+=segSec);
+    const seg={onField:[...field],inIds:[],outIds:[]};
+    if(prev){seg.inIds=field.filter(id=>!prev.includes(id));seg.outIds=prev.filter(id=>!field.includes(id));}
+    segs.push(seg);
+    prev=[...field];
+    if(i<segCount-1&&swapN>0){
+      const inc=[...bench].sort((a,b)=>tot(byId(a))-tot(byId(b))||byId(a).name.localeCompare(byId(b).name,"nb")).slice(0,swapN);
+      const out=[...field].sort((a,b)=>tot(byId(b))-tot(byId(a))||byId(a).name.localeCompare(byId(b).name,"nb")).slice(0,swapN);
+      field=field.filter(id=>!out.includes(id)).concat(inc);
+      bench=bench.filter(id=>!inc.includes(id)).concat(out);
+    }
+  }
+  return {segs,segSec,segCount,slots,len,
+    names:Object.fromEntries(ps.map(p=>[p.id,p.name])),
+    keeperId,keeperName:keeperId?store.players.find(p=>p.id===keeperId)?.name:null,
+    playedPlan:Object.fromEntries(ps.map(p=>[p.id,p.match]))};
+}
+
+/* ===================== MATCH ===================== */
+function startMatch(){
+  $("#setupErr").innerHTML="";
+  const p=planPreview();
+  if(p.slots<=0){$("#setupErr").innerHTML='<div class="errbox">Velg et gyldig format.</div>';return;}
+  if(p.rot<p.slots){$("#setupErr").innerHTML='<div class="errbox">For få utespillere ('+p.rot+') for '+p.slots+' plasser. Hak av flere eller fjern keeper.</div>';return;}
+  const plan=buildPlan();
+  match={plan,accMs:0,startedAt:Date.now(),running:true,seg:0,firedWarn:{},firedSub:{},ended:false};
+  show("match");requestWake();tick();loopStart();
+}
+function elapsed(){return Math.min(match.plan.len,(match.accMs+(match.running?Date.now()-match.startedAt:0))/1000);}
+function curSeg(e){return Math.min(Math.floor(e/match.plan.segSec),match.plan.segCount-1);}
+
+function playedThisMatch(){ // seconds on field per rotating id up to now
+  const e=elapsed(),cs=curSeg(e),res={};
+  match.plan.segs.forEach((seg,i)=>{
+    let dur= i<cs?match.plan.segSec : (i===cs? e-i*match.plan.segSec : 0);
+    if(dur<=0)return;
+    seg.onField.forEach(id=>res[id]=(res[id]||0)+dur);
+  });
+  return res;
+}
+
+function loopStart(){cancelAnimationFrame(raf);const f=()=>{tick();raf=requestAnimationFrame(f);};raf=requestAnimationFrame(f);}
+function loopStop(){cancelAnimationFrame(raf);raf=null;}
+
+function tick(){
+  if(!match)return;
+  const e=elapsed(),P=match.plan,cs=curSeg(e);
+  // advance segment pointer + fire sub
+  if(cs>match.seg){match.seg=cs;const s=P.segs[cs];if(s.inIds.length){beep("sub");vibrate([400,120,400,120,400]);}}
+  // end of match
+  if(e>=P.len&&match.running){finishMatch();return;}
+  const boundary=(cs+1)*P.segSec, toSub=boundary-e, lastSeg=cs>=P.segCount-1;
+  // 30s forewarning
+  if(!lastSeg&&toSub<=30&&toSub>0&&!match.firedWarn[cs+1]){match.firedWarn[cs+1]=true;beep("warn");vibrate([180,90,180]);}
+  // --- paint ---
+  const cc=$("#countCard"),big=$("#countBig"),sub=$("#countSub"),lab=$("#countLab");
+  cc.classList.remove("now");big.classList.remove("soon");
+  if(lastSeg){
+    lab.textContent="Spilletid igjen";big.textContent=fmt(P.len-e);
+    sub.textContent="Siste periode";
+  }else{
+    const justSubbed=(e-cs*P.segSec)<2.5&&cs>0&&P.segs[cs].inIds.length;
+    if(justSubbed){cc.classList.add("now");lab.textContent="BYTT NÅ";big.textContent="⇄";}
+    else{lab.textContent="Neste bytte om";big.textContent=fmt(toSub);if(toSub<=30)big.classList.add("soon");}
+    sub.textContent="Bytte "+(cs+1)+" av "+(P.segCount-1)+" · "+fmt(e)+" / "+fmt(P.len);
+  }
+  renderSwap(cs);renderLineups(cs,e);
+}
+
+function renderSwap(cs){
+  const P=match.plan,box=$("#swapCard");
+  if(cs>=P.segCount-1){box.innerHTML='<div class="nochange">Ingen flere bytter – spill ut perioden 🙌</div>';return;}
+  const nxt=P.segs[cs+1];
+  if(!nxt.inIds.length){box.innerHTML='<div class="nochange">Ingen bytte neste periode.</div>';return;}
+  box.innerHTML=`<div class="swap-head">Neste bytte</div>
+    <div class="swap-line"><span class="swap-tag in">INN</span><span class="swap-names">${nxt.inIds.map(id=>esc(P.names[id])).join(", ")}</span></div>
+    <div class="swap-line"><span class="swap-tag out">UT</span><span class="swap-names">${nxt.outIds.map(id=>esc(P.names[id])).join(", ")}</span></div>`;
+}
+
+function renderLineups(cs,e){
+  const P=match.plan,played=playedThisMatch();
+  const nextIn=cs<P.segCount-1?P.segs[cs+1].inIds:[];
+  const nextOut=cs<P.segCount-1?P.segs[cs+1].outIds:[];
+  // field
+  let fh="";
+  if(P.keeperId)fh+=`<div class="prow gk"><span class="q">🧤</span><span class="nm">${esc(P.keeperName)}</span><span class="t">keeper</span></div>`;
+  P.segs[cs].onField.forEach(id=>{
+    fh+=`<div class="prow${nextOut.includes(id)?" next":""}"><span class="q"></span><span class="nm">${esc(P.names[id])}</span><span class="t">${fmt(played[id]||0)}</span></div>`;
+  });
+  $("#fieldList").innerHTML=fh;
+  // bench (queue order: least played comes in first)
+  const bench=Object.keys(P.names).filter(id=>!P.segs[cs].onField.includes(id));
+  bench.sort((a,b)=>(played[a]||0)-(played[b]||0));
+  let bh=bench.length?"":'<p class="muted" style="font-size:.85rem">Ingen på benken.</p>';
+  bench.forEach((id,i)=>{
+    bh+=`<div class="prow${nextIn.includes(id)?" next":""}"><span class="q">${i+1}</span><span class="nm">${esc(P.names[id])}</span><span class="t">${fmt(played[id]||0)}</span></div>`;
+  });
+  $("#benchList").innerHTML=bh;
+}
+
+function togglePause(){
+  if(!match)return;
+  if(match.running){match.accMs+=Date.now()-match.startedAt;match.running=false;loopStop();releaseWake();
+    $("#pauseBtn").innerHTML="▶ Fortsett";$("#pauseBtn").classList.add("btn-accent");tick();}
+  else{match.startedAt=Date.now();match.running=true;if(store.opts.wake)requestWake();loopStart();
+    $("#pauseBtn").innerHTML="⏸ Pause";$("#pauseBtn").classList.remove("btn-accent");}
+}
+
+function finishMatch(){
+  const played=playedThisMatch(),e=elapsed();
+  // commit carry-over
+  Object.entries(played).forEach(([id,sec])=>{if(store.totals[id])store.totals[id].field+=sec;});
+  if(match.plan.keeperId){const t=store.totals[match.plan.keeperId];if(t){t.gk+=e;t.gkCount+=1;t.lastGk=new Date().toLocaleDateString("nb-NO",{day:"numeric",month:"short"});}}
+  save();loopStop();releaseWake();
+  // summary
+  const rows=Object.entries(played).map(([id,s])=>({name:match.plan.names[id],s})).sort((a,b)=>b.s-a.s);
+  if(match.plan.keeperId)rows.push({name:match.plan.keeperName+" 🧤",s:e,gk:true});
+  $("#summaryTable").innerHTML=rows.map(r=>`<div class="summary-row"><span>${esc(r.name)}</span><span class="tabnums">${mmin(r.s)}</span></div>`).join("");
+  match=null;show("done");
+}
+
+/* ===================== DEVICE: wake / audio / vibrate ===================== */
+let wakeLock=null;
+async function requestWake(){
+  if(!store.opts.wake)return;
+  try{if("wakeLock"in navigator){wakeLock=await navigator.wakeLock.request("screen");
+    $("#wakeNote").textContent="Skjermen holdes våken mens kampen går.";}
+    else $("#wakeNote").textContent="⚠️ Nettleseren støtter ikke skjerm-våkenlås – hold appen åpen.";}
+  catch(e){$("#wakeNote").textContent="⚠️ Fikk ikke holde skjermen våken – hold appen åpen.";}
+}
+function releaseWake(){try{wakeLock&&wakeLock.release();}catch(e){}wakeLock=null;}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&match&&match.running&&store.opts.wake)requestWake();});
+
+let actx=null;
+function beep(kind){
+  if(!store.opts.sound)return;
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==="suspended")actx.resume();
+    const seq=kind==="sub"?[[880,0],[880,.18],[1175,.36]]:[[660,0],[660,.16]];
+    seq.forEach(([f,t])=>{const o=actx.createOscillator(),g=actx.createGain();o.type="sine";o.frequency.value=f;
+      o.connect(g);g.connect(actx.destination);const s=actx.currentTime+t;
+      g.gain.setValueAtTime(.0001,s);g.gain.exponentialRampToValueAtTime(.4,s+.02);
+      g.gain.exponentialRampToValueAtTime(.0001,s+.14);o.start(s);o.stop(s+.16);});}
+  catch(e){}
+}
+function vibrate(pat){if(store.opts.vib&&navigator.vibrate){try{navigator.vibrate(pat);}catch(e){}}}
+
+/* ===================== VIEW SWITCH ===================== */
+function show(v){
+  $("#setupView").hidden=v!=="setup";$("#matchView").hidden=v!=="match";$("#doneView").hidden=v!=="done";
+  window.scrollTo(0,0);
+}
+
+/* ===================== EVENTS ===================== */
+$("#formatSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;
+  store.cfg.onField=+b.dataset.v;save();renderFormat();renderPlanHint();});
+$("#lenPlus").onclick=()=>{store.cfg.len=Math.min(45,store.cfg.len+5);save();renderLen();};
+$("#lenMinus").onclick=()=>{store.cfg.len=Math.max(5,store.cfg.len-5);save();renderLen();};
+$("#subPlus").onclick=()=>{store.cfg.interval=Math.min(5,+(store.cfg.interval+0.5).toFixed(1));save();renderLen();};
+$("#subMinus").onclick=()=>{store.cfg.interval=Math.max(2,+(store.cfg.interval-0.5).toFixed(1));save();renderLen();};
+
+$("#playerList").addEventListener("click",e=>{
+  const b=e.target.closest("button");if(!b)return;const id=b.dataset.id,act=b.dataset.act;
+  if(act==="toggle"){present[id]=!present[id];if(!present[id]&&keeperId===id)keeperId=null;}
+  else if(act==="gk"){keeperId=keeperId===id?null:id;}
+  else if(act==="del"){if(confirmInline()){store.players=store.players.filter(p=>p.id!==id);delete present[id];if(keeperId===id)keeperId=null;save();}}
+  renderPlayers();
+});
+function confirmInline(){return true;} // deletion is cheap & local; roster rebuilt easily
+$("#gkWarn").addEventListener("click",e=>{const b=e.target.closest("#suggestGk");if(b){keeperId=b.dataset.id;renderPlayers();}});
+
+function addPlayer(){const n=$("#newName").value.trim();if(!n)return;
+  const p={id:uid(),name:n};store.players.push(p);store.totals[p.id]={field:0,gk:0,gkCount:0,lastGk:null};
+  present[p.id]=true;$("#newName").value="";save();renderPlayers();$("#newName").focus();}
+$("#addBtn").onclick=addPlayer;
+$("#newName").addEventListener("keydown",e=>{if(e.key==="Enter")addPlayer();});
+$("#allOnBtn").onclick=()=>{const all=store.players.every(p=>present[p.id]);store.players.forEach(p=>present[p.id]=!all);if(all)keeperId=null;renderPlayers();};
+
+$("#resetSeason").onclick=()=>{store.players.forEach(p=>store.totals[p.id]={field:0,gk:0,gkCount:0,lastGk:null});save();renderPlayers();};
+$("#startBtn").onclick=startMatch;
+$("#pauseBtn").onclick=togglePause;
+$("#doneBtn").onclick=()=>{if(match)finishMatch();};
+$("#backBtn").onclick=()=>{show("setup");renderPlayers();};
+
+$("#wakeSw").onclick=function(){store.opts.wake=!store.opts.wake;this.setAttribute("aria-pressed",store.opts.wake);save();if(store.opts.wake&&match&&match.running)requestWake();else releaseWake();};
+$("#soundSw").onclick=function(){store.opts.sound=!store.opts.sound;this.setAttribute("aria-pressed",store.opts.sound);save();if(store.opts.sound)beep("warn");};
+$("#vibSw").onclick=function(){store.opts.vib=!store.opts.vib;this.setAttribute("aria-pressed",store.opts.vib);save();if(store.opts.vib)vibrate([120]);};
+
+/* theme */
+function applyTheme(){if(store.theme)document.documentElement.setAttribute("data-theme",store.theme);else document.documentElement.removeAttribute("data-theme");}
+$("#themeBtn").onclick=()=>{const cur=store.theme||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light");store.theme=cur==="dark"?"light":"dark";save();applyTheme();};
+
+/* ---------- init ---------- */
+load();applyTheme();
+store.players.forEach(p=>present[p.id]=true);
+renderFormat();renderLen();renderPlayers();
+["wake","sound","vib"].forEach(k=>$("#"+k+"Sw").setAttribute("aria-pressed",store.opts[k]!==false));
